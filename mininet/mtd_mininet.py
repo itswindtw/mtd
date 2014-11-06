@@ -67,7 +67,7 @@ def add_interfaces_for_mtd(net):
         print 'Host: ', host.name 
         if host.name == 'a1':
             host.cmd('sudo ifconfig lo:1 100.0.0.1 netmask 255.255.255.0 up')
-            host.cmd('sudo ifconfig lo:1 100.0.0.7 netmask 255.255.255.0 up')
+            host.cmd('sudo ifconfig lo:100 100.0.0.7 netmask 255.255.255.0 up')
         elif host.name == 'b1':
             host.cmd('sudo ifconfig lo:1 110.0.0.10 netmask 255.255.255.0 up')
             host.cmd('sudo ifconfig lo:2 110.0.0.20 netmask 255.255.255.0 up')
