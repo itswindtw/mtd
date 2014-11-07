@@ -1,10 +1,9 @@
 import random
-import time
-from threading import Timer
 from bitarray import bitarray
 
 from pox.core import core
 from pox.lib.revent import *
+from pox.lib.recoco import Timer
 import pox.openflow.libopenflow_01 as of
 
 from pox.lib.addresses import IPAddr, EthAddr
@@ -72,9 +71,9 @@ class MTDController(EventMixin):
         self.listenTo(core.openflow)
         log.info("Enabling MTD Module...")
 
+        Timer(ASSIGNMENT_DURATION_SEC, self.flush_assignments, recurring=True)
     
     def flush_assignments(self):
-        Timer(ASSIGNMENT_DURATION_SEC, self.flush_assignments).start()
         
         used_ipaddrs = set(self.mapping.keys())
         def next_ip_addr():
@@ -92,6 +91,12 @@ class MTDController(EventMixin):
         self.mapping = next_mapping
 
         print "Current mapping: ", self.mapping
+        for conn in core.openflow.connections:
+            conn.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
+
+    def _handle_FlowStatsReceived(self, event):
+        for f in event.stats:
+            print f
 
     def _handle_PacketIn(self, event):
         packet = event.parsed
