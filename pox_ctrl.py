@@ -52,7 +52,7 @@ class MTDController(EventMixin):
         super(MTDController, self).__init__()
 
         self.mapping = {}
-        self.fixed = fiexed
+        self.fixed = fixed
         self.hosts = hosts
         self.prefixes = MTDIPPrefixes(networks)
         
@@ -132,10 +132,11 @@ class MTDController(EventMixin):
             return flood()
         
         if ip.dstip in self.mapping:
-            print "[3]"
-            fwd(self.mapping[ip.dstip])
+            target = self.mapping[ip.dstip]
+            print "Making a connection between %s and %s(%s)" \
+                    % (ip.srcip, ip.dstip, target)
+            fwd(target)
         else:
-            print "[4]"
             drop()
 
 def launch():
