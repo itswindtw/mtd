@@ -1,4 +1,6 @@
 import random
+import time
+from threading import Timer
 from bitarray import bitarray
 
 from pox.core import core
@@ -8,6 +10,9 @@ import pox.openflow.libopenflow_01 as of
 from pox.lib.addresses import IPAddr, EthAddr
 
 log = core.getLogger()
+
+RULE_DURATION_SEC = 30.0
+ASSIGNMENT_DURATION_SEC = 15.0
 
 class MTDIPPrefixes(object):
     def __init__(self, prefixes):
@@ -49,7 +54,6 @@ class MTDIPPrefix(object):
 
 class MTDController(EventMixin):
     """TODO:
-    *) A timeout mechanism(Threading.Timer?) to trigger flushing
     *) When we trigger a reassignment, maybe we can use 
        ofp_stats_request to find out a suspect and drop him/her out
 
@@ -67,10 +71,12 @@ class MTDController(EventMixin):
 
         self.listenTo(core.openflow)
         log.info("Enabling MTD Module...")
+
     
     def flush_assignments(self):
+        Timer(ASSIGNMENT_DURATION_SEC, self.flush_assignments).start()
+        
         used_ipaddrs = set(self.mapping.keys())
-
         def next_ip_addr():
             ip_addr = self.prefixes.rand_ip_addr()
             while ip_addr in used_ipaddrs:
@@ -98,7 +104,7 @@ class MTDController(EventMixin):
             msg.in_port = event.port
             event.connection.send(msg)
 
-        def drop(duration=(10, 10)):
+        def drop(duration=(RULE_DURATION_SEC, RULE_DURATION_SEC)):
             if not isinstance(duration, tuple):
                 duration = (duration, duration)
             msg = of.ofp_flow_mod()
@@ -108,7 +114,7 @@ class MTDController(EventMixin):
             msg.buffer_id = event.ofp.buffer_id
             event.connection.send(msg)
 
-        def fwd(target, duration=(10, 10)):
+        def fwd(target, duration=(RULE_DURATION_SEC, RULE_DURATION_SEC)):
             if not isinstance(duration, tuple):
                 duration = (duration, duration)
             # srcip -> dstip
