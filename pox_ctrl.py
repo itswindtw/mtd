@@ -48,10 +48,11 @@ class MTDIPPrefix(object):
         return "%s/%d" % (repr(self.pattern), self.masklen)
 
 class MTDController(EventMixin):
-    def __init__(self, hosts, networks):
+    def __init__(self, fixed, hosts, networks):
         super(MTDController, self).__init__()
 
         self.mapping = {}
+        self.fixed = fiexed
         self.hosts = hosts
         self.prefixes = MTDIPPrefixes(networks)
         
@@ -127,7 +128,7 @@ class MTDController(EventMixin):
             msg.in_port = event.port
             event.connection.send(msg)
 
-        if ip is None or ip.dstip == IPAddr('172.0.0.1') or ip.dstip == IPAddr('172.0.0.11'):
+        if ip is None or ip.dstip in self.fixed:
             return flood()
         
         if ip.dstip in self.mapping:
@@ -138,11 +139,12 @@ class MTDController(EventMixin):
             drop()
 
 def launch():
+    fixed = [IPAddr('172.0.0.1'), IPAddr('172.0.0.11')]
     hosts = [IPAddr('100.0.0.7')]
     networks = ['140.0.0.0/16',
                 '150.0.0.0/8',
                 '160.0.0.0/8',
                 '170.0.0.0/16']
 
-    core.registerNew(MTDController, hosts, networks)
+    core.registerNew(MTDController, fixed, hosts, networks)
 
