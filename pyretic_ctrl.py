@@ -1,15 +1,11 @@
 from pyretic.lib.corelib import *
 from pyretic.lib.std import *
+from pyretic.lib.query import *
 
 import random
-from collections import NamedTuple
+from collections import namedtuple
 
-class MTDConnection(object):
-    def __init__(self, srcip, dstip, target):
-        self.srcip = srcip
-        self.dstip = dstip
-        self.target = target
-        self.timeout = 2
+MTDConnection = namedtuple('MTDConnection', ['srcip', 'dstip'])
 
 class MTDIPPrefixes(object):
     def __init__(self, prefixes):
@@ -42,7 +38,7 @@ class MTDController(DynamicPolicy):
         self.hosts = hosts
         self.prefixes = MTDIPPrefixes(prefixes)
 
-        self.connections = [] # FIXME: data structure
+        self.connections = {}
 
         self.flush_all_assignments()
         self.update_policy()
@@ -62,18 +58,36 @@ class MTDController(DynamicPolicy):
             
         self.mapping = next_mapping
 
+        print "Current mapping: ", self.mapping
+
         self.query = packets(1, ['srcip', 'dstip'])
         self.query.register_callback(self.establish_conn)
 
     def update_policy(self):
         # TODO: build policy from connections
-        self.policy = flood
+        policies = [self.query]
+        for k, v in self.connections.iteritems():
+            policies.append(match(srcip=k.srcip, dstip=k.dstip) >> modify(dstip=v) >> flood())
+            policies.append(match(srcip=v, dstip=k.srcip) >> modify(srcip=k.dstip) >> flood())
+
+        self.policy = union(policies)
+
+        print "Policy updated..."
 
     def establish_conn(self, pkt):
-        # TODO
+        # TODO: a load balancing mechanism to trigger flush assignment
         # add conn to connections
         # update policy if changed
-        pass
+
+        print "Establishing..."
+        key = MTDConnection(pkt['srcip'], pkt['dstip'])
+        conn = self.connections.get(MTDConnection(key, None))
+        if conn is None and pkt['dstip'] in self.mapping:
+            real_dstip = self.mapping[pkt['dstip']]
+            self.connections[key] = real_dstip
+            self.update_policy()
+
+        return pkt
 
     # TODO: we need a timeout mechanism(Threading.Timer?) to clean up connections
     # TODO: we need a timeout mechanism to flush assignments
@@ -86,6 +100,7 @@ def main():
                 '160.0.0.0/8',
                 '170.0.0.0/8']
 
-    # TODO: just flood hosts connection (172.)
-    return MTDController(networks)
+    return if_(match(dstip=IPAddr('172.0.0.1')) | match(dstip=IPAddr('172.0.0.11')),
+        flood(), 
+        MTDController(hosts, networks))
 

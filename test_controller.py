@@ -1,5 +1,5 @@
 import unittest
-from controller import *
+from pox_ctrl import *
 
 HOSTS = [IPAddr('100.0.0.7')]
 NETWORKS = ['140.0.0.0/16',
