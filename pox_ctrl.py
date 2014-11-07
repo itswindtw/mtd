@@ -96,7 +96,9 @@ class MTDController(EventMixin):
 
     def _handle_FlowStatsReceived(self, event):
         for f in event.stats:
-            print f
+            if not f.actions:
+                continue
+            print f.actions
 
     def _handle_PacketIn(self, event):
         packet = event.parsed
