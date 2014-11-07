@@ -48,6 +48,13 @@ class MTDIPPrefix(object):
         return "%s/%d" % (repr(self.pattern), self.masklen)
 
 class MTDController(EventMixin):
+    """TODO:
+    *) A timeout mechanism(Threading.Timer?) to trigger flushing
+    *) When we trigger a reassignment, maybe we can use 
+       ofp_stats_request to find out a suspect and drop him/her out
+
+    *) a test script (similar as submit.py) to automatic testing
+    """
     def __init__(self, fixed, hosts, networks):
         super(MTDController, self).__init__()
 
@@ -60,19 +67,21 @@ class MTDController(EventMixin):
 
         self.listenTo(core.openflow)
         log.info("Enabling MTD Module...")
-        
+    
     def flush_assignments(self):
-        def next_ip_addr(used):
+        used_ipaddrs = set(self.mapping.keys())
+
+        def next_ip_addr():
             ip_addr = self.prefixes.rand_ip_addr()
-            while ip_addr in used:
-                ip_addr = self.prefixes.rand_ip_addr()
+            while ip_addr in used_ipaddrs:
+               ip_addr = self.prefixed.rand_ip_addr()
             return ip_addr
 
-        used_ipaddrs = set(self.mapping.keys())
         next_mapping = {}
         for host in self.hosts:
-            new_ip_addr = next_ip_addr(used_ipaddrs)
+            new_ip_addr = next_ip_addr()
             next_mapping[new_ip_addr] = host
+            used_ipaddrs.add(new_ip_addr)
 
         self.mapping = next_mapping
 
