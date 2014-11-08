@@ -12,6 +12,8 @@ log = core.getLogger()
 
 RULE_DURATION_SEC = 30.0
 ASSIGNMENT_DURATION_SEC = 15.0
+STATS_PERIOD_SEC = 10.0
+LOAD_BALANCE_NUM = 2 
 
 class MTDIPPrefixes(object):
     def __init__(self, prefixes):
@@ -74,6 +76,7 @@ class MTDController(EventMixin):
         super(MTDController, self).__init__()
 
         self.mapping = {}
+        self.mapping_rev = {}
         self.fixed = fixed
         self.hosts = hosts
         self.prefixes = MTDIPPrefixes(networks)
@@ -83,31 +86,44 @@ class MTDController(EventMixin):
         self.listenTo(core.openflow)
         log.info("Enabling MTD Module...")
 
+        Timer(STATS_PERIOD_SEC, self.start_stats_collection, recurring=True)
         Timer(ASSIGNMENT_DURATION_SEC, self.flush_assignments, recurring=True)
     
-    def flush_assignments(self):
-        
-        used_ipaddrs = set(self.mapping.keys())
-        def next_ip_addr():
-            ip_addr = self.prefixes.rand_ip_addr()
-            while ip_addr in used_ipaddrs:
-               ip_addr = self.prefixed.rand_ip_addr()
-            return ip_addr
+    def _next_ip_addr(self, used):
+        ip_addr = self.prefixes.rand_ip_addr()
+        while ip_addr in used:
+            ip_addr = self.prefixed.rand_ip_addr()
+        return ip_addr
 
+    def flush_assignments(self):
+        used_ipaddrs = set(self.mapping.keys())
         next_mapping = {}
         for host in self.hosts:
-            new_ip_addr = next_ip_addr()
-            next_mapping[new_ip_addr] = host
+            new_ip_addr = self._next_ip_addr(used_ipaddrs)
+            next_mapping[new_ip_addr] = [host, 0]
             used_ipaddrs.add(new_ip_addr)
 
         self.mapping = next_mapping
 
         print "Current mapping: ", self.mapping
+
+    def flush_assignment(self, vip):
+        used_ipaddrs = set(self.mapping.keys())
+        host, _ = self.mapping[vip]
+        new_ip_addr = self._next_ip_addr(used_ipaddrs)
+        del self.mapping[vip]
+        self.mapping[new_ip_addr] = [host, 0]
+
+        print "Host %s switched from %s to %s" % (host, vip, new_ip_addr)
+
+    def start_stats_collection(self):
         for conn in core.openflow.connections:
             conn.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
 
     def _handle_FlowStatsReceived(self, event):
         def compute_avg_rate(stat):
+            if stat.duration_sec == 0:
+                return 0
             return (float(stat.packet_count) / stat.duration_sec)
 
         def drop(from_rule, duration=RULE_DURATION_SEC):
@@ -130,7 +146,7 @@ class MTDController(EventMixin):
         rates = map(compute_avg_rate, flow_stats)
         flow_stats = zip(rates, flow_stats)
 
-        print flow_stats
+        print "Debug:", flow_stats
 
         # TODO: how to find out attackers?
         # compute standard derivation d and set threshold to avg + 3*d?
@@ -195,8 +211,13 @@ class MTDController(EventMixin):
         if ip.dstip in self.mapping:
             target = self.mapping[ip.dstip]
             print "Making a connection between %s and %s(%s)" \
-                    % (ip.srcip, ip.dstip, target)
-            fwd(target)
+                    % (ip.srcip, ip.dstip, target[0])
+
+            target[1] += 1
+            if target[1] >= LOAD_BALANCE_NUM:
+                self.flush_assignment(ip.dstip)
+            
+            fwd(target[0])
         else:
             drop()
 
