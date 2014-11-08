@@ -151,6 +151,11 @@ class MTDController(EventMixin):
         # TODO: how to find out attackers?
         # compute standard derivation d and set threshold to avg + 3*d?
         # and a predefined threshold to avoid making erroneous judgement?
+        
+        # Notice: I use # of pkt to compute avg insead of bytes
+        # I thought how many requests does a user ask is more accurate 
+        # than how much traffic does a user send.
+        # Maybe I am wrong....
 
         # Once we find attacker(s), use drop method above to insert a 
         # higher priority(1) entry to block them out
