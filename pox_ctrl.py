@@ -132,6 +132,13 @@ class MTDController(EventMixin):
 
         print flow_stats
 
+        # TODO: how to find out attackers?
+        # compute standard derivation d and set threshold to avg + 3*d?
+        # and a predefined threshold to avoid making erroneous judgement?
+
+        # Once we find attacker(s), use drop method above to insert a 
+        # higher priority(1) entry to block them out
+
     def _handle_PacketIn(self, event):
         packet = event.parsed
         ip = packet.find('ipv4')
