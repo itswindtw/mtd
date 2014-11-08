@@ -30,6 +30,9 @@ class MTDIPPrefixes(object):
             if draw <= 0:
                 return p
 
+    def __contains__(self, ipaddr):
+        return any([ipaddr in prefix for prefix in self.prefixes])
+
 class MTDIPPrefix(object):
     def __init__(self, pattern):
         parts = pattern.split("/")
@@ -50,6 +53,15 @@ class MTDIPPrefix(object):
 
     def __repr__(self):
         return "%s/%d" % (repr(self.pattern), self.masklen)
+
+    def __contains__(self, ipaddr):
+        if not isinstance(ipaddr, IPAddr):
+            raise TypeError
+        
+        ipaddr_bits = bitarray()
+        ipaddr_bits.frombytes(ipaddr.toRaw())
+
+        return self.prefix == ipaddr_bits[:self.masklen]
 
 class MTDController(EventMixin):
     """TODO:
@@ -95,10 +107,30 @@ class MTDController(EventMixin):
             conn.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
 
     def _handle_FlowStatsReceived(self, event):
+        def compute_avg_rate(stat):
+            return (float(stat.packet_count) / stat.duration_sec)
+
+        def drop(from_rule, duration=RULE_DURATION_SEC):
+            if not instance(duration, tuple):
+                duration = (duration, duration)
+            msg = of.ofp_flow_mod()
+            msg.match = from_rule.match
+            msg.priority = 1
+            msg.idle_timeout = duration[0]
+            msg.hard_timeout = duration[1]
+            event.connection.send(msg)
+
+        flow_stats = []
         for f in event.stats:
-            if not f.actions:
+            if not f.actions or not f.match.nw_dst in self.prefixes:
                 continue
-            print f.actions
+
+            flow_stats.append(f)
+
+        rates = map(compute_avg_rate, flow_stats)
+        flow_stats = zip(rates, flow_stats)
+
+        print flow_stats
 
     def _handle_PacketIn(self, event):
         packet = event.parsed

@@ -20,5 +20,18 @@ class MTDIPPrefixesTestCase(unittest.TestCase):
         print prefixes.rand_ip_addr()
         print prefixes.rand_ip_addr()
 
+    def test_contains(self):
+        prefixes = MTDIPPrefixes(NETWORKS)
+        self.assertTrue(IPAddr('140.0.0.3') in prefixes)
+        self.assertTrue(IPAddr('140.0.8.3') in prefixes)
+        self.assertFalse(IPAddr('180.0.8.3') in prefixes)
+
+class MTDIPPrefixTestCase(unittest.TestCase):
+    def test_contains(self):
+        self.assertTrue(IPAddr('140.0.0.3') in MTDIPPrefix('140.0.0.0/8'))
+        self.assertTrue(IPAddr('140.0.1.5') in MTDIPPrefix('140.0.0.0/8'))
+        self.assertFalse(IPAddr('140.0.0.2') in MTDIPPrefix('140.0.0.0/32'))
+        self.assertFalse(IPAddr('141.0.1.5') in MTDIPPrefix('140.0.0.0/8'))
+
 if __name__ == '__main__':
     unittest.main()
