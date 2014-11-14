@@ -14,6 +14,10 @@ RULE_DURATION_SEC = 30.0
 ASSIGNMENT_DURATION_SEC = 15.0
 STATS_PERIOD_SEC = 10.0
 LOAD_BALANCE_NUM = 2 
+MINIMUM_THRESHOLD = 10.0
+CURRENT_THRESHOLD = 10.0
+THRESHOLD_LOAD_FACTOR = 0.75
+THRESHOLD_INCREASE_FACTOR = 0.1
 
 class MTDIPPrefixes(object):
     def __init__(self, prefixes):
@@ -66,6 +70,7 @@ class MTDIPPrefix(object):
         return self.prefix == ipaddr_bits[:self.masklen]
 
 class MTDController(EventMixin):
+
     """TODO:
     *) When we trigger a reassignment, maybe we can use 
        ofp_stats_request to find out a suspect and drop him/her out
@@ -81,6 +86,8 @@ class MTDController(EventMixin):
         self.hosts = hosts
         self.prefixes = MTDIPPrefixes(networks)
         
+    	self.current_threshold = MINIMUM_THRESHOLD
+
         self.flush_assignments()
 
         self.listenTo(core.openflow)
@@ -143,7 +150,10 @@ class MTDController(EventMixin):
 
             flow_stats.append(f)
 
+	# array of avg traffic rate per IP address
         rates = map(compute_avg_rate, flow_stats)
+
+	# array of tuples that matches avg rate to its flow stats
         flow_stats = zip(rates, flow_stats)
 
         print "Debug:", flow_stats
@@ -159,6 +169,38 @@ class MTDController(EventMixin):
 
         # Once we find attacker(s), use drop method above to insert a 
         # higher priority(1) entry to block them out
+	
+	total_rate = 0
+	count = 0
+
+	for flow_stat in flow_stats:
+		# check if traffic is above current threshold
+		if flow_stat[0] > self.current_threshold:
+			drop(flow_stat[1].mw_dst) #how to properly call drop rule??
+			print "DENIAL OF SERVICE ATTACK DETECTED"
+		# calculate the avergage rate of flows that were not determined to be attacks
+		else:
+			total_rate += flow_stat[0]
+			count += 1
+
+	# alter current threshold if necessary
+	if count != 0:
+		avg_rate = total_rate/count
+	# if no flows exist
+	else:
+		avg_rate = 0
+	
+	print "avg rate: ", avg_rate
+	print "current threshold: ", self.current_threshold
+
+	# compare avg rate to the current threshold, increase if necessary
+	if (avg_rate > self.current_threshold * THRESHOLD_LOAD_FACTOR):
+		self.current_threshold += avg_rate * THRESHOLD_INCREASE_FACTOR 
+
+	elif (avg_rate < self.current_threshold * (1 - THRESHOLD_LOAD_FACTOR)):
+		self.current_threshold -= avg_rate * THRESHOLD_INCREASE_FACTOR
+		if self.current_threshold < MINIMUM_THRESHOLD:
+			self.current_threshold = MINIMUM_THRESHOLD			
 
     def _handle_PacketIn(self, event):
         packet = event.parsed
