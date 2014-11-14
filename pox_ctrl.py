@@ -10,8 +10,8 @@ from pox.lib.addresses import IPAddr, EthAddr
 
 log = core.getLogger()
 
-RULE_DURATION_SEC = 30.0
-ASSIGNMENT_DURATION_SEC = 15.0
+RULE_DURATION_SEC = 60.0
+ASSIGNMENT_DURATION_SEC = 30.0
 STATS_PERIOD_SEC = 10.0
 LOAD_BALANCE_NUM = 2 
 MINIMUM_THRESHOLD = 10.0
@@ -70,7 +70,6 @@ class MTDIPPrefix(object):
         return self.prefix == ipaddr_bits[:self.masklen]
 
 class MTDController(EventMixin):
-
     """TODO:
     *) When we trigger a reassignment, maybe we can use 
        ofp_stats_request to find out a suspect and drop him/her out
@@ -86,7 +85,8 @@ class MTDController(EventMixin):
         self.hosts = hosts
         self.prefixes = MTDIPPrefixes(networks)
         
-    	self.current_threshold = MINIMUM_THRESHOLD
+        self.blocked_flows = set() 
+        self.current_threshold = MINIMUM_THRESHOLD
 
         self.flush_assignments()
 
@@ -134,13 +134,13 @@ class MTDController(EventMixin):
             return (float(stat.packet_count) / stat.duration_sec)
 
         def drop(from_rule, duration=RULE_DURATION_SEC):
-            if not instance(duration, tuple):
+            if not isinstance(duration, tuple):
                 duration = (duration, duration)
-            msg = of.ofp_flow_mod()
+            msg = of.ofp_flow_mod(priority=42)
             msg.match = from_rule.match
-            msg.priority = 1
-            msg.idle_timeout = duration[0]
-            msg.hard_timeout = duration[1]
+            msg.command = of.OFPFC_MODIFY
+            #msg.idle_timeout = duration[0]
+            #msg.hard_timeout = duration[1]
             event.connection.send(msg)
 
         flow_stats = []
@@ -150,57 +150,41 @@ class MTDController(EventMixin):
 
             flow_stats.append(f)
 
-	# array of avg traffic rate per IP address
+        # array of avg traffic rate per IP address
         rates = map(compute_avg_rate, flow_stats)
 
-	# array of tuples that matches avg rate to its flow stats
+        # array of tuples that matches avg rate to its flow stats
         flow_stats = zip(rates, flow_stats)
 
-        print "Debug:", flow_stats
-
-        # TODO: how to find out attackers?
-        # compute standard derivation d and set threshold to avg + 3*d?
-        # and a predefined threshold to avoid making erroneous judgement?
-        
-        # Notice: I use # of pkt to compute avg insead of bytes
-        # I thought how many requests does a user ask is more accurate 
-        # than how much traffic does a user send.
-        # Maybe I am wrong....
-
-        # Once we find attacker(s), use drop method above to insert a 
-        # higher priority(1) entry to block them out
-	
-	total_rate = 0
+        # detection of attacks
+	total_rate = 0.0
 	count = 0
 
 	for flow_stat in flow_stats:
-		# check if traffic is above current threshold
-		if flow_stat[0] > self.current_threshold:
-			drop(flow_stat[1].mw_dst) #how to properly call drop rule??
-			print "DENIAL OF SERVICE ATTACK DETECTED"
-		# calculate the avergage rate of flows that were not determined to be attacks
-		else:
-			total_rate += flow_stat[0]
-			count += 1
+            # check if traffic is above current threshold
+            if flow_stat[0] > self.current_threshold:
+                if flow_stat[1].match not in self.blocked_flows:        
+                    print "DENIAL OF SERVICE ATTACK DETECTED"
+                    drop(flow_stat[1])
+                    self.blocked_flows.add(flow_stat[1].match)
+            # calculate the avergage rate of flows that were not determined to be attacks
+            else:
+                total_rate += flow_stat[0]
+                count += 1
 
-	# alter current threshold if necessary
-	if count != 0:
-		avg_rate = total_rate/count
-	# if no flows exist
-	else:
-		avg_rate = 0
+        # alter current threshold if necessary
+        avg_rate = total_rate/count if count != 0 else 0
 	
-	print "avg rate: ", avg_rate
-	print "current threshold: ", self.current_threshold
+	print "avg rate:", avg_rate
+	print "current threshold:", self.current_threshold
 
 	# compare avg rate to the current threshold, increase if necessary
-	if (avg_rate > self.current_threshold * THRESHOLD_LOAD_FACTOR):
-		self.current_threshold += avg_rate * THRESHOLD_INCREASE_FACTOR 
-
-	elif (avg_rate < self.current_threshold * (1 - THRESHOLD_LOAD_FACTOR)):
-		self.current_threshold -= avg_rate * THRESHOLD_INCREASE_FACTOR
-		if self.current_threshold < MINIMUM_THRESHOLD:
-			self.current_threshold = MINIMUM_THRESHOLD			
+        if (avg_rate > self.current_threshold * THRESHOLD_LOAD_FACTOR):
+            self.current_threshold += avg_rate * THRESHOLD_INCREASE_FACTOR
+        elif (avg_rate < self.current_threshold * (1 - THRESHOLD_LOAD_FACTOR)):
+            self.current_threshold -= avg_rate * THRESHOLD_INCREASE_FACTOR
+            if self.current_threshold < MINIMUM_THRESHOLD:
+		self.current_threshold = MINIMUM_THRESHOLD
 
     def _handle_PacketIn(self, event):
         packet = event.parsed
@@ -228,7 +212,8 @@ class MTDController(EventMixin):
                 duration = (duration, duration)
             # srcip -> dstip
             msg = of.ofp_flow_mod()
-            msg.match = of.ofp_match.from_packet(packet)
+            #msg.match = of.ofp_match.from_packet(packet)
+            msg.match = of.ofp_match(dl_type=0x800, nw_src=ip.srcip, nw_dst=ip.dstip)
             msg.idle_timeout = duration[0]
             msg.hard_timeout = duration[1]
             msg.actions.append(of.ofp_action_nw_addr.set_dst(target))
