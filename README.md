@@ -1,8 +1,13 @@
 # Moving Target Defense in SDX
 
-
 ## Setup
 
+* Install Quagga: $ sudo apt-get install quagga
+* Install Mininext
+  * $ git clone https://github.com/USC-NSL/miniNExT.git miniNExT/
+  * $ cd miniNExT
+  * $ git checkout 1.4.0
+  * $ sudo make install
 * Copy the project directory under pox (~/pox/pox/)
 
 ## How to start
