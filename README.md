@@ -2,7 +2,8 @@
 
 ## Setup
 
-* Install Quagga: $ sudo apt-get install quagga
+* Install Quagga 
+  * $ sudo apt-get install quagga
 * Install Mininext
   * $ git clone https://github.com/USC-NSL/miniNExT.git miniNExT/
   * $ cd miniNExT
