@@ -64,7 +64,7 @@ class QuaggaTopo(Topo):
 def add_interfaces_for_mtd(net):
     print 'Configuring participating ASs...'
     for host in net.hosts:
-        print 'Host: ', host.name 
+        print 'Host: ', host.name
         if host.name == 'a1':
             host.cmd('sudo ifconfig lo:1 100.0.0.1 netmask 255.255.255.0 up')
             host.cmd('sudo ifconfig lo:100 100.0.0.7 netmask 255.255.255.0 up')
@@ -77,9 +77,9 @@ def startNetwork():
     info('** Creating Quagga network topology\n')
     topo = QuaggaTopo()
     net = Mininext(topo=topo,
-            controller=lambda name: RemoteController(name, ip='127.0.0.1'),
-            listenPort=6633)
-    
+                   controller=lambda name: RemoteController(name, ip='127.0.0.1'),
+                   listenPort=6633)
+
     info('** Starting the network\n')
     net.start()
 

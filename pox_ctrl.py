@@ -13,7 +13,7 @@ log = core.getLogger()
 RULE_DURATION_SEC = 60.0
 ASSIGNMENT_DURATION_SEC = 30.0
 STATS_PERIOD_SEC = 10.0
-LOAD_BALANCE_NUM = 2 
+LOAD_BALANCE_NUM = 2
 MINIMUM_THRESHOLD = 1.0
 CURRENT_THRESHOLD = 1.0
 THRESHOLD_LOAD_FACTOR = 0.75
@@ -22,8 +22,8 @@ THRESHOLD_INCREASE_FACTOR = 0.1
 class MTDIPPrefixes(object):
     def __init__(self, prefixes):
         self.prefixes = map(MTDIPPrefix, prefixes)
-        self.total_masklen = reduce(
-                lambda acc, x: acc+x.masklen, self.prefixes, 0)
+        self.total_masklen = reduce(lambda acc, x: acc+x.masklen,
+                                    self.prefixes, 0)
 
     def rand_ip_addr(self):
         prefix = self.rand_ip_prefix()
@@ -44,7 +44,7 @@ class MTDIPPrefix(object):
         parts = pattern.split("/")
         if len(parts) != 2:
             raise TypeError
-        
+
         self.masklen = int(parts[1])
         self.pattern = IPAddr(parts[0])
 
@@ -63,7 +63,7 @@ class MTDIPPrefix(object):
     def __contains__(self, ipaddr):
         if not isinstance(ipaddr, IPAddr):
             raise TypeError
-        
+
         ipaddr_bits = bitarray()
         ipaddr_bits.frombytes(ipaddr.toRaw())
 
@@ -71,7 +71,7 @@ class MTDIPPrefix(object):
 
 class MTDController(EventMixin):
     """TODO:
-    *) When we trigger a reassignment, maybe we can use 
+    *) When we trigger a reassignment, maybe we can use
        ofp_stats_request to find out a suspect and drop him/her out
 
     *) a test script (similar as submit.py) to automatic testing
@@ -84,8 +84,8 @@ class MTDController(EventMixin):
         self.fixed = fixed
         self.hosts = hosts
         self.prefixes = MTDIPPrefixes(networks)
-        
-        self.blocked_flows = set() 
+
+        self.blocked_flows = set()
         self.current_threshold = MINIMUM_THRESHOLD
 
         self.flush_assignments()
@@ -95,7 +95,7 @@ class MTDController(EventMixin):
 
         Timer(STATS_PERIOD_SEC, self.start_stats_collection, recurring=True)
         Timer(ASSIGNMENT_DURATION_SEC, self.flush_assignments, recurring=True)
-    
+
     def _next_ip_addr(self, used):
         ip_addr = self.prefixes.rand_ip_addr()
         while ip_addr in used:
@@ -131,7 +131,7 @@ class MTDController(EventMixin):
         def compute_avg_rate(stat):
             if stat.duration_sec == 0:
                 return 0
-            return (float(stat.packet_count) / stat.duration_sec)
+            return float(stat.packet_count) / stat.duration_sec
 
         def drop(from_rule, duration=RULE_DURATION_SEC):
             if not isinstance(duration, tuple):
@@ -157,13 +157,13 @@ class MTDController(EventMixin):
         flow_stats = zip(rates, flow_stats)
 
         # detection of attacks
-	total_rate = 0.0
-	count = 0
+        total_rate = 0.0
+        count = 0
 
-	for flow_stat in flow_stats:
+        for flow_stat in flow_stats:
             # check if traffic is above current threshold
             if flow_stat[0] > self.current_threshold:
-                if flow_stat[1].match not in self.blocked_flows:        
+                if flow_stat[1].match not in self.blocked_flows:
                     print "DENIAL OF SERVICE ATTACK DETECTED"
                     drop(flow_stat[1])
                     self.blocked_flows.add(flow_stat[1].match)
@@ -174,17 +174,17 @@ class MTDController(EventMixin):
 
         # alter current threshold if necessary
         avg_rate = total_rate/count if count != 0 else 0
-	
-	print "avg rate:", avg_rate
-	print "current threshold:", self.current_threshold
 
-	# compare avg rate to the current threshold, increase if necessary
-        if (avg_rate > self.current_threshold * THRESHOLD_LOAD_FACTOR):
+        print "avg rate:", avg_rate
+        print "current threshold:", self.current_threshold
+
+        # compare avg rate to the current threshold, increase if necessary
+        if avg_rate > self.current_threshold * THRESHOLD_LOAD_FACTOR:
             self.current_threshold += avg_rate * THRESHOLD_INCREASE_FACTOR
-        elif (avg_rate < self.current_threshold * (1 - THRESHOLD_LOAD_FACTOR)):
+        elif avg_rate < self.current_threshold * (1 - THRESHOLD_LOAD_FACTOR):
             self.current_threshold -= avg_rate * THRESHOLD_INCREASE_FACTOR
             if self.current_threshold < MINIMUM_THRESHOLD:
-		self.current_threshold = MINIMUM_THRESHOLD
+                self.current_threshold = MINIMUM_THRESHOLD
 
     def _handle_PacketIn(self, event):
         packet = event.parsed
@@ -239,7 +239,7 @@ class MTDController(EventMixin):
 
         if ip is None or ip.dstip in self.fixed:
             return flood()
-        
+
         if ip.dstip in self.mapping:
             target = self.mapping[ip.dstip]
             print "Making a connection between %s and %s(%s)" \
@@ -248,7 +248,7 @@ class MTDController(EventMixin):
             target[1] += 1
             if target[1] >= LOAD_BALANCE_NUM:
                 self.flush_assignment(ip.dstip)
-            
+
             fwd(target[0])
         else:
             drop()
