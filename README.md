@@ -7,9 +7,9 @@
 
 ## How to start
 
-  $ cd [project working directory]
-  $ sudo python mininet/mtd_mininet.py
-  $ pox.py pox.mtd.pox_ctrl
+    $ cd [project working directory]
+    $ sudo python mininet/mtd_mininet.py
+    $ pox.py pox.mtd.pox_ctrl
 
 ## Test environment
 
@@ -25,27 +25,27 @@
 
 #### 1. Accessing host via active IP address
 
-  mininext> b1 ping -I110.0.0.11 [current virtual IP of 100.0.0.7]
-  ...
-  ..
-  .
-  You could see that this ping should be allowed to reach host for a while.
+    mininext> b1 ping -I110.0.0.11 [current virtual IP of 100.0.0.7]
+    ...
+    ..
+    .
+    You could see that this ping should be allowed to reach host for a while.
 
 #### 2. Accessing host via expired IP address
 
-  mininext> b1 ping -I110.0.0.11 [previous virtual IP of 100.0.0.7]
-  ...
-  ..
-  .
-  This ping command should receive 100% packet lost.
+    mininext> b1 ping -I110.0.0.11 [previous virtual IP of 100.0.0.7]
+    ...
+    ..
+    .
+    This ping command should receive 100% packet lost.
 
 #### 3. "Simulated" attacks
 
-  mininext> a1 iperf -s -B 100.0.0.7 -p 8000 &
-  mininext> b1 iperf -B 110.0.0.11 -p 8000 -i 1 -t 30 -c [current virtual IP of 10.0.0.7]
-  ...
-  ..
-  .
-  This flow will start for a second, but its flow entry will be removed by controller after DoS attack has been detected.
+    mininext> a1 iperf -s -B 100.0.0.7 -p 8000 &
+    mininext> b1 iperf -B 110.0.0.11 -p 8000 -i 1 -t 30 -c [current virtual IP of 10.0.0.7]
+    ...
+    ..
+    .
+    This flow will start for a second, but its flow entry will be removed by controller after DoS attack has been detected.
 
 
